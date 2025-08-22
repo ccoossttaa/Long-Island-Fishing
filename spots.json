@@ -1,0 +1,59 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kings Park Bluff (KPB)",
+        "species": "Striped Bass, Bluefish",
+        "season": "Apr\u2013Jun, Sep\u2013Nov",
+        "bestTide": "Outgoing to slack",
+        "notes": "Work the current seams; metal lips/eels at night.",
+        "url": "https://goo.gl/maps/zr5NTH6yXvVnP7R86"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.2365,
+          40.9114
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Shinnecock Inlet (Ocean side)",
+        "species": "Striped Bass, Albies (fall)",
+        "season": "May\u2013Jun, Sep\u2013Nov",
+        "bestTide": "Flood, early dawn",
+        "notes": "Jigs and needlefish in NE winds; mind the rocks.",
+        "url": "https://goo.gl/maps/wSL8zFJ2jYf1nR3N8"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -72.4842,
+          40.8387
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Orient Point (North Ferry)",
+        "species": "Striped Bass, Blues",
+        "season": "May\u2013Jun, Oct\u2013Nov",
+        "bestTide": "Moving water",
+        "notes": "Heavy current; bucktails on bottom.",
+        "url": "https://goo.gl/maps/9nH9mVPSX8rE9kEJ8"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -72.2375,
+          41.1299
+        ]
+      }
+    }
+  ]
+}

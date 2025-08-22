@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Long Island Fishing Map</title>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Marker Cluster (helps when you add lots of spots) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header { padding: 10px 14px; border-bottom: 1px solid #e6e6e6; display:flex; gap:12px; align-items:center; }
+    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+    header .spacer { flex: 1; }
+    .btn { border: 1px solid #d0d0d0; background: #fff; padding: 6px 10px; border-radius: 10px; cursor: pointer; }
+    .btn:hover { background:#f6f6f6; }
+    #map { width: 100%; height: 100%; }
+    .popup h3 { margin: 0 0 6px; font-size: 15px; }
+    .popup .meta { font-size: 13px; color: #444; margin: 6px 0; }
+    .popup a { word-break: break-word; }
+    .legend { position: absolute; right: 10px; bottom: 10px; background: white; border: 1px solid #e6e6e6; border-radius: 12px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-size: 12px; }
+    .legend b { display:block; margin-bottom:6px; }
+    .note { font-size:12px; color:#555; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Long Island Fishing Map</h1>
+      <div class="spacer"></div>
+      <button id="reload" class="btn" title="Fetch the latest spots.json">Reload spots</button>
+      <button id="share" class="btn" title="Copy the shareable link">Copy share link</button>
+    </header>
+    <div id="map"></div>
+  </div>
+
+  <script>
+    // =============================
+    // 1) CONFIG — edit these bits
+    // =============================
+    const INITIAL_VIEW = {
+      center: [40.941, -72.55], // North Fork-ish
+      zoom: 10
+    };
+
+    // If you host a separate spots.json in the same folder, this page will load it automatically.
+    // That way, everyone with the URL sees updates without changing the link.
+    const SPOTS_JSON_URL = './spots.json';
+
+    // Inline fallback data (used only if spots.json is not found). Edit or replace.
+    // Schema: FeatureCollection of Points with properties: name, species, season, bestTide, notes, url, image
+    window.SPOTS_INLINE = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "name": "Kings Park Bluff (KPB)",
+            "species": "Striped Bass, Bluefish",
+            "season": "Apr–Jun, Sep–Nov",
+            "bestTide": "Outgoing to slack",
+            "notes": "Work the current seams; metal lips/eels at night.",
+            "url": "https://goo.gl/maps/zr5NTH6yXvVnP7R86"
+          },
+          "geometry": { "type": "Point", "coordinates": [-73.2365, 40.9114] }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "name": "Shinnecock Inlet (Ocean side)",
+            "species": "Striped Bass, Albies (fall)",
+            "season": "May–Jun, Sep–Nov",
+            "bestTide": "Flood, early dawn",
+            "notes": "Jigs and needlefish in NE winds; mind the rocks.",
+            "url": "https://goo.gl/maps/wSL8zFJ2jYf1nR3N8"
+          },
+          "geometry": { "type": "Point", "coordinates": [-72.4842, 40.8387] }
+        },
+        {
+          "type": "Feature",
+          "properties": {
+            "name": "Orient Point (North Ferry)**",
+            "species": "Striped Bass, Blues",
+            "season": "May–Jun, Oct–Nov",
+            "bestTide": "Moving water",
+            "notes": "Heavy current; bucktails on bottom.",
+            "url": "https://goo.gl/maps/9nH9mVPSX8rE9kEJ8"
+          },
+          "geometry": { "type": "Point", "coordinates": [-72.2375, 41.1299] }
+        }
+      ]
+    };
+
+    // =============================
+    // 2) BASE MAP
+    // =============================
+    const map = L.map('map', { zoomControl: true }).setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom);
+
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // =============================
+    // 3) LAYER + POPUPS
+    // =============================
+    const cluster = L.markerClusterGroup();
+    let spotsLayer = L.geoJSON(null, {
+      pointToLayer: (feature, latlng) => L.marker(latlng),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties || {};
+        const safe = (x) => (x ? String(x) : '—');
+        const html = `
+          <div class="popup">
+            <h3>${safe(p.name)}</h3>
+            <div class="meta"><b>Species:</b> ${safe(p.species)}</div>
+            <div class="meta"><b>Season:</b> ${safe(p.season)}</div>
+            <div class="meta"><b>Best tide:</b> ${safe(p.bestTide)}</div>
+            <div class="meta"><b>Notes:</b> ${safe(p.notes)}</div>
+            ${p.url ? `<div class="meta"><a href="${p.url}" target="_blank" rel="noopener">More info / directions</a></div>` : ''}
+          </div>`;
+        layer.bindPopup(html);
+      }
+    });
+
+    cluster.addLayer(spotsLayer);
+    map.addLayer(cluster);
+
+    // =============================
+    // 4) DATA LOADING (auto-refreshable)
+    // =============================
+    async function loadSpots({ bustCache=false } = {}) {
+      try {
+        const bust = bustCache ? `?t=${Date.now()}` : '';
+        const res = await fetch(SPOTS_JSON_URL + bust, { cache: 'no-store' });
+        if (!res.ok) throw new Error('No spots.json found');
+        const data = await res.json();
+        applySpots(data);
+        console.log('Loaded spots.json');
+      } catch (e) {
+        applySpots(window.SPOTS_INLINE);
+        console.warn('Using inline spots (fallback):', e.message);
+      }
+    }
+
+    function applySpots(geojson) {
+      spotsLayer.clearLayers();
+      spotsLayer.addData(geojson);
+      if (spotsLayer.getLayers().length) {
+        map.fitBounds(spotsLayer.getBounds().pad(0.2));
+      }
+    }
+
+    // Initial load
+    loadSpots();
+
+    // =============================
+    // 5) UI: reload + share
+    // =============================
+    document.getElementById('reload').addEventListener('click', () => loadSpots({ bustCache: true }));
+
+    document.getElementById('share').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        const btn = document.getElementById('share');
+        const prev = btn.textContent;
+        btn.textContent = 'Link copied!';
+        setTimeout(() => (btn.textContent = prev), 1200);
+      } catch {
+        alert('Copy failed. You can manually share this page URL.');
+      }
+    });
+
+    // =============================
+    // 6) LEGEND
+    // =============================
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function() {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = `
+        <b>How to use</b>
+        <div>• Click a dot for spot info.</div>
+        <div>• Use <em>Reload spots</em> to pull the newest data.</div>
+        <div class="note">Edit <code>spots.json</code> in this folder to update everyone with the same link.</div>`;
+      return div;
+    };
+    legend.addTo(map);
+  </script>
+</body>
+</html>
